@@ -2,6 +2,16 @@
 
 一个可部署的 Three.js 第一人称射击小游戏。项目是纯前端 Vite 应用，构建后生成静态文件，可以部署到 Vercel、Netlify、Cloudflare Pages、GitHub Pages 或任意静态服务器。
 
+## 在线游玩
+
+公网地址：
+
+```text
+https://fps-training-arena.vercel.app
+```
+
+手机、平板、朋友的电脑都要打开这个公网地址。`http://127.0.0.1:5174` 只是本机开发地址，只能在当前运行服务器的电脑上打开。
+
 ## 本地运行
 
 ```bash

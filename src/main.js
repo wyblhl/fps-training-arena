@@ -3,8 +3,11 @@ import './style.css';
 
 const ARENA = { size: 52, wallHeight: 6 };
 const PLAYER_HEIGHT = 1.72;
+const PLAYER_MOVE_SPEED = 8.3;
+const PLAYER_COLLISION_RADIUS = 0.52;
 const BULLET_SPEED = 42;
 const ENEMY_BULLET_SPEED = 24;
+const MOVEMENT_KEYS = new Set(['KeyW', 'KeyA', 'KeyS', 'KeyD']);
 const QUALITY_PROFILES = {
   low: { label: '低画质', pixelRatio: 0.8, particles: 90, playerBullets: 36, enemyBullets: 36, pointLights: false },
   medium: { label: '均衡', pixelRatio: 1, particles: 120, playerBullets: 44, enemyBullets: 44, pointLights: true },
@@ -269,6 +272,10 @@ class Player {
     this.yaw = 0;
     this.pitch = 0;
     this.velocity = new THREE.Vector3();
+    this.moveWish = new THREE.Vector3();
+    this.moveForward = new THREE.Vector3();
+    this.moveRight = new THREE.Vector3();
+    this.moveProbe = new THREE.Vector3();
     this.keys = new Set();
     this.fireHeld = false;
     this.fireCooldown = 0;
@@ -356,9 +363,11 @@ class Player {
     this.fireCooldown -= dt;
     if (this.fireHeld) this.shoot(game);
 
-    const forward = new THREE.Vector3(Math.sin(this.yaw), 0, Math.cos(this.yaw) * -1);
-    const right = new THREE.Vector3(Math.cos(this.yaw), 0, Math.sin(this.yaw));
-    const wish = new THREE.Vector3();
+    // 移动方向必须和 Three.js 摄像机的 yaw 坐标系保持一致。
+    // 摄像机默认看向 -Z，绕 Y 轴旋转后前方向为 (-sin(yaw), 0, -cos(yaw))。
+    const forward = this.moveForward.set(-Math.sin(this.yaw), 0, -Math.cos(this.yaw));
+    const right = this.moveRight.set(Math.cos(this.yaw), 0, -Math.sin(this.yaw));
+    const wish = this.moveWish.set(0, 0, 0);
     if (this.keys.has('KeyW')) wish.add(forward);
     if (this.keys.has('KeyS')) wish.sub(forward);
     if (this.keys.has('KeyD')) wish.add(right);
@@ -367,17 +376,35 @@ class Player {
       wish.addScaledVector(forward, -game.touch.move.y);
       wish.addScaledVector(right, game.touch.move.x);
     }
-    if (wish.lengthSq() > 0) wish.normalize().multiplyScalar(8.2);
-    this.velocity.lerp(wish, 1 - Math.pow(0.001, dt));
-    const next = this.camera.position.clone().addScaledVector(this.velocity, dt);
-    next.x = clamp(next.x, -ARENA.size / 2 + 1, ARENA.size / 2 - 1);
-    next.z = clamp(next.z, -ARENA.size / 2 + 1, ARENA.size / 2 - 1);
-    if (!game.collidesWithCover(next, 0.65)) this.camera.position.copy(next);
+    if (wish.lengthSq() > 0) {
+      wish.normalize().multiplyScalar(PLAYER_MOVE_SPEED);
+      this.velocity.lerp(wish, 1 - Math.exp(-18 * dt));
+    } else {
+      this.velocity.multiplyScalar(Math.exp(-22 * dt));
+      if (this.velocity.lengthSq() < 0.002) this.velocity.set(0, 0, 0);
+    }
+
+    // 分轴碰撞让玩家撞到掩体边缘时可以沿墙滑动，而不是 X/Z 一起被锁死。
+    const current = this.camera.position;
+    this.moveProbe.copy(current);
+    this.moveProbe.x = clamp(current.x + this.velocity.x * dt, -ARENA.size / 2 + 1, ARENA.size / 2 - 1);
+    if (!game.collidesWithCover(this.moveProbe, PLAYER_COLLISION_RADIUS)) {
+      current.x = this.moveProbe.x;
+    } else {
+      this.velocity.x = 0;
+    }
+    this.moveProbe.copy(current);
+    this.moveProbe.z = clamp(current.z + this.velocity.z * dt, -ARENA.size / 2 + 1, ARENA.size / 2 - 1);
+    if (!game.collidesWithCover(this.moveProbe, PLAYER_COLLISION_RADIUS)) {
+      current.z = this.moveProbe.z;
+    } else {
+      this.velocity.z = 0;
+    }
     this.camera.position.y = PLAYER_HEIGHT + Math.sin(performance.now() * 0.008) * this.velocity.length() * 0.006;
 
     this.shake = Math.max(0, this.shake - dt * 4);
     this.recoil = Math.max(0, this.recoil - dt * 7.5);
-    this.camera.rotation.set(this.pitch - this.recoil * 0.04 + rand(-this.shake, this.shake) * 0.015, this.yaw + rand(-this.shake, this.shake) * 0.012, 0, 'YXZ');
+    this.camera.rotation.set(this.pitch - this.recoil * 0.04 + rand(-this.shake, this.shake) * 0.012, this.yaw, 0, 'YXZ');
     this.weapon.rotation.x = -this.recoil * 0.24;
     this.weapon.position.z = -0.42 + this.recoil * 0.11;
     this.weapon.userData.flash.intensity = Math.max(0, this.weapon.userData.flash.intensity - dt * 38);
@@ -387,6 +414,12 @@ class Player {
   look(dx, dy) {
     this.yaw -= dx * 0.0023;
     this.pitch = clamp(this.pitch - dy * 0.002, -1.25, 1.25);
+  }
+
+  clearInput(stopMovement = true) {
+    this.keys.clear();
+    this.fireHeld = false;
+    if (stopMovement) this.velocity.set(0, 0, 0);
   }
 
   shoot(game) {
@@ -669,6 +702,7 @@ class Game {
   }
 
   reset(showStart = true) {
+    this.player?.clearInput();
     this.scene.children.filter((child) => child !== this.camera).forEach((child) => this.scene.remove(child));
     while (this.camera.children.length) this.camera.remove(this.camera.children[0]);
     this.coverWalls = [];
@@ -922,19 +956,24 @@ class Game {
       this.renderer.setSize(window.innerWidth, window.innerHeight);
     });
     window.addEventListener('keydown', (e) => {
-      this.player?.keys.add(e.code);
+      const isUiControl = e.target?.closest?.('button, select, input, textarea');
+      if (isUiControl) return;
+      if (MOVEMENT_KEYS.has(e.code)) this.player?.keys.add(e.code);
       if (e.code === 'KeyP') this.togglePause();
       if (e.code === 'KeyR') {
         this.player.reload();
         this.audio.beep('reload');
       }
     });
-    window.addEventListener('keyup', (e) => this.player?.keys.delete(e.code));
+    window.addEventListener('keyup', (e) => {
+      if (MOVEMENT_KEYS.has(e.code)) this.player?.keys.delete(e.code);
+    });
     this.renderer.domElement.addEventListener('click', () => {
       this.startGame();
     });
     document.addEventListener('pointerlockchange', () => {
       this.hud.lock.textContent = document.pointerLockElement ? '鼠标已锁定' : '点击画面锁定鼠标';
+      if (document.pointerLockElement !== this.renderer.domElement) this.player?.clearInput();
     });
     window.addEventListener('mousemove', (e) => {
       if (document.pointerLockElement === this.renderer.domElement) this.player.look(e.movementX, e.movementY);
@@ -969,8 +1008,9 @@ class Game {
       this.applyQuality(true);
     });
     document.addEventListener('visibilitychange', () => {
-      if (document.hidden && this.player) this.player.fireHeld = false;
+      if (document.hidden) this.player?.clearInput();
     });
+    window.addEventListener('blur', () => this.player?.clearInput());
     this.bindTouch();
   }
 
@@ -983,6 +1023,7 @@ class Game {
     if (this.over) return;
     this.started = true;
     this.hud.start.hidden = true;
+    this.player.clearInput();
     this.audio.ensure();
     this.renderer.domElement.requestPointerLock?.();
     if (this.wave === 1 && this.enemiesRemaining > 0) this.showAnnouncement('第 1 波', '清理目标，保持移动');
@@ -991,7 +1032,7 @@ class Game {
   togglePause() {
     if (this.over) return;
     this.paused = !this.paused;
-    this.player.fireHeld = false;
+    this.player.clearInput();
     this.hud.pause.textContent = this.paused ? '继续' : '暂停';
     this.hud.pause.setAttribute('aria-pressed', `${this.paused}`);
     this.hud.lock.textContent = this.paused ? '已暂停' : (document.pointerLockElement ? '鼠标已锁定' : '点击画面锁定鼠标');
