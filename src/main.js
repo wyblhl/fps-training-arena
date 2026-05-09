@@ -16,6 +16,10 @@ const TMP = {
   v3: new THREE.Vector3(),
   ray: new THREE.Raycaster(),
 };
+const GAME_COPY = {
+  title: 'NEON RANGE',
+  subtitle: '霓虹突击训练',
+};
 
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
 const rand = (min, max) => min + Math.random() * (max - min);
@@ -30,9 +34,9 @@ function createGridTexture() {
   canvas.width = 256;
   canvas.height = 256;
   const ctx = canvas.getContext('2d');
-  ctx.fillStyle = '#50545a';
+  ctx.fillStyle = '#202932';
   ctx.fillRect(0, 0, 256, 256);
-  ctx.strokeStyle = '#747a82';
+  ctx.strokeStyle = '#405766';
   ctx.lineWidth = 2;
   for (let i = 0; i <= 256; i += 32) {
     ctx.beginPath();
@@ -42,7 +46,15 @@ function createGridTexture() {
     ctx.lineTo(256, i);
     ctx.stroke();
   }
-  ctx.strokeStyle = '#3a3d43';
+  ctx.strokeStyle = '#0dc9e8';
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.moveTo(128, 0);
+  ctx.lineTo(128, 256);
+  ctx.moveTo(0, 128);
+  ctx.lineTo(256, 128);
+  ctx.stroke();
+  ctx.strokeStyle = '#111820';
   ctx.lineWidth = 6;
   ctx.strokeRect(0, 0, 256, 256);
   const tex = new THREE.CanvasTexture(canvas);
@@ -277,8 +289,9 @@ class Player {
 
   createWeapon() {
     const group = new THREE.Group();
-    const metal = makeMat(0x242931, 0.32, 0.8);
-    const black = makeMat(0x11151a, 0.45, 0.7);
+    const metal = makeMat(0x202833, 0.26, 0.9);
+    const black = makeMat(0x070b10, 0.4, 0.75);
+    const accent = new THREE.MeshBasicMaterial({ color: 0x20e6ff, transparent: true, opacity: 0.8 });
     const skin = makeMat(0xc58b61, 0.7, 0.02);
     const addBox = (size, pos, mat) => {
       const mesh = new THREE.Mesh(new THREE.BoxGeometry(...size), mat);
@@ -292,6 +305,7 @@ class Player {
     addBox([0.26, 0.22, 0.72], [0.22, -0.61, -0.35], metal);
     addBox([0.16, 0.62, 0.18], [0.47, -0.84, -0.98], black);
     addBox([0.55, 0.14, 0.28], [0.48, -0.22, -0.46], metal);
+    addBox([0.09, 0.035, 0.9], [0.27, -0.24, -1.05], accent);
     const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, 0.72, 16), black);
     barrel.rotation.x = Math.PI / 2;
     barrel.position.set(0.49, -0.36, -1.98);
@@ -469,8 +483,17 @@ class Enemy {
     gun.position.set(0.42 * scale, 1.34 * scale, -0.55 * scale);
     const flash = new THREE.PointLight(0xffb12f, 0, 5);
     flash.position.set(0.42 * scale, 1.34 * scale, -1.1 * scale);
-    g.add(body, head, leftArm, rightArm, leftLeg, rightLeg, gun, flash);
+    const bar = new THREE.Group();
+    const barBg = new THREE.Mesh(new THREE.PlaneGeometry(0.9 * scale, 0.08 * scale), new THREE.MeshBasicMaterial({ color: 0x111820, transparent: true, opacity: 0.86, depthWrite: false }));
+    const barFill = new THREE.Mesh(new THREE.PlaneGeometry(0.86 * scale, 0.045 * scale), new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.96, depthWrite: false }));
+    bar.position.set(0, 2.55 * scale, 0);
+    barFill.position.z = 0.01;
+    bar.add(barBg, barFill);
+    g.add(body, head, leftArm, rightArm, leftLeg, rightLeg, gun, flash, bar);
     g.userData.flash = flash;
+    g.userData.healthBar = bar;
+    g.userData.healthFill = barFill;
+    g.userData.healthScale = scale;
     return g;
   }
 
@@ -492,6 +515,10 @@ class Enemy {
       if (!game.collidesWithCover(next, 0.55)) this.group.position.copy(next);
     }
     this.group.lookAt(playerPos.x, this.group.position.y, playerPos.z);
+    this.group.userData.healthBar.lookAt(game.camera.position);
+    const healthRatio = clamp(this.health / this.maxHealth, 0, 1);
+    this.group.userData.healthFill.scale.x = healthRatio;
+    this.group.userData.healthFill.position.x = -0.43 * this.group.userData.healthScale * (1 - healthRatio);
     this.group.userData.flash.intensity = Math.max(0, this.group.userData.flash.intensity - dt * 28);
     this.fireTimer -= dt;
     if (this.fireTimer <= 0 && distance < 28 && game.hasLineOfSight(this.group.position, playerPos)) {
@@ -507,14 +534,14 @@ class Enemy {
   takeDamage(amount, game) {
     this.health -= amount;
     game.audio.beep('hit');
+    game.registerHit(amount, this.type);
     game.particles.burst(this.headWorldPosition(), 0xffffff, 8, 2);
     if (this.health <= 0) {
       this.alive = false;
       this.group.visible = false;
       game.particles.burst(this.group.position.clone().add(new THREE.Vector3(0, 1.2, 0)), this.type === 'boss' ? 0xffc83d : this.type === 'fast' ? 0x8d4bff : 0xd94444, 26, 5);
-      game.player.score += this.type === 'boss' ? 500 : this.type === 'fast' ? 160 : 100;
+      game.onEnemyKilled(this);
       game.player.updateHud();
-      window.setTimeout(() => game.respawnEnemy(this.type === 'boss' ? 'normal' : null), 900);
     }
   }
 }
@@ -595,6 +622,12 @@ class Game {
       quality: document.querySelector('#qualitySelect'),
       fps: document.querySelector('#fpsMeter'),
       sound: document.querySelector('#soundToggle'),
+      pause: document.querySelector('#pauseToggle'),
+      wave: document.querySelector('#waveText'),
+      objective: document.querySelector('#objectiveText'),
+      combo: document.querySelector('#comboText'),
+      hitMarker: document.querySelector('#hitMarker'),
+      announcement: document.querySelector('#announcement'),
     };
     this.touch = {
       move: new THREE.Vector2(),
@@ -608,11 +641,17 @@ class Game {
     this.fpsAverage = 60;
     this.fpsTimer = 0;
     this.lowFpsSeconds = 0;
+    this.wave = 1;
+    this.enemiesRemaining = 0;
+    this.combo = 0;
+    this.comboTimer = 0;
+    this.paused = false;
+    this.started = false;
     this.over = false;
     this.initRenderer();
     this.bindEvents();
     this.updateSoundButton();
-    this.reset();
+    this.reset(true);
     this.animate();
   }
 
@@ -629,14 +668,21 @@ class Game {
     this.app.appendChild(this.renderer.domElement);
   }
 
-  reset() {
+  reset(showStart = true) {
     this.scene.children.filter((child) => child !== this.camera).forEach((child) => this.scene.remove(child));
     while (this.camera.children.length) this.camera.remove(this.camera.children[0]);
     this.coverWalls = [];
     this.enemies = [];
     this.pickups = [];
+    this.wave = 1;
+    this.enemiesRemaining = 0;
+    this.combo = 0;
+    this.comboTimer = 0;
+    this.paused = false;
+    this.started = !showStart;
     this.over = false;
     this.hud.gameOver.hidden = true;
+    this.hud.start.hidden = !showStart;
     const profile = QUALITY_PROFILES[this.quality];
     this.playerBullets = new BulletPool(this.scene, profile.playerBullets, 0xfff2a0);
     this.enemyBullets = new BulletPool(this.scene, profile.enemyBullets, 0xff7a22);
@@ -644,10 +690,11 @@ class Game {
     this.buildArena();
     this.player = new Player(this.camera, this.hud);
     this.spawnCovers();
-    ['normal', 'normal', 'normal', 'normal', 'fast', 'fast', 'boss'].forEach((type) => this.respawnEnemy(type));
     for (let i = 0; i < 6; i += 1) this.spawnPickup();
+    this.startWave();
     this.hud.quality.value = this.quality;
     this.applyQuality(false);
+    this.updateGameHud();
   }
 
   pixelRatio() {
@@ -674,16 +721,18 @@ class Game {
   }
 
   buildArena() {
-    const ambient = new THREE.HemisphereLight(0xbfd7ff, 0x2b2520, 1.15);
-    const sun = new THREE.DirectionalLight(0xffffff, 1.9);
+    const ambient = new THREE.HemisphereLight(0xaed7ff, 0x1b1018, 1.05);
+    const sun = new THREE.DirectionalLight(0xeff7ff, 1.55);
     sun.position.set(-12, 20, 8);
     sun.castShadow = true;
     sun.shadow.mapSize.set(1024, 1024);
-    const pointA = new THREE.PointLight(0x50a8ff, 2.4, 24);
+    const pointA = new THREE.PointLight(0x0edcff, 2.6, 25);
     pointA.position.set(-18, 4, -18);
-    const pointB = new THREE.PointLight(0xffb65a, 2.1, 22);
+    const pointB = new THREE.PointLight(0xffba45, 2.1, 22);
     pointB.position.set(18, 4, 16);
-    this.scene.add(ambient, sun, pointA, pointB);
+    const pointC = new THREE.PointLight(0xff3bd5, 1.7, 20);
+    pointC.position.set(0, 4, -20);
+    this.scene.add(ambient, sun, pointA, pointB, pointC);
     const floor = new THREE.Mesh(
       new THREE.PlaneGeometry(ARENA.size, ARENA.size),
       new THREE.MeshStandardMaterial({ map: createGridTexture(), roughness: 0.82, metalness: 0.05 }),
@@ -691,7 +740,8 @@ class Game {
     floor.rotation.x = -Math.PI / 2;
     floor.receiveShadow = true;
     this.scene.add(floor);
-    const wallMat = makeMat(0x343a42, 0.68, 0.08);
+    this.addArenaTrim();
+    const wallMat = makeMat(0x202833, 0.68, 0.08);
     const wallDefs = [
       [[ARENA.size, ARENA.wallHeight, 0.7], [0, ARENA.wallHeight / 2, -ARENA.size / 2]],
       [[ARENA.size, ARENA.wallHeight, 0.7], [0, ARENA.wallHeight / 2, ARENA.size / 2]],
@@ -705,6 +755,28 @@ class Game {
       wall.castShadow = true;
       this.scene.add(wall);
     });
+  }
+
+  addArenaTrim() {
+    const cyan = new THREE.MeshBasicMaterial({ color: 0x0edcff, transparent: true, opacity: 0.58, depthWrite: false });
+    const amber = new THREE.MeshBasicMaterial({ color: 0xffc44d, transparent: true, opacity: 0.52, depthWrite: false });
+    for (let i = -20; i <= 20; i += 10) {
+      const line = new THREE.Mesh(new THREE.PlaneGeometry(0.09, ARENA.size - 2), cyan);
+      line.rotation.x = -Math.PI / 2;
+      line.position.set(i, 0.015, 0);
+      this.scene.add(line);
+    }
+    [-18, 0, 18].forEach((z) => {
+      const line = new THREE.Mesh(new THREE.PlaneGeometry(ARENA.size - 2, 0.11), amber);
+      line.rotation.x = -Math.PI / 2;
+      line.position.set(0, 0.018, z);
+      this.scene.add(line);
+    });
+    for (let x = -18; x <= 18; x += 12) {
+      const lamp = new THREE.Mesh(new THREE.BoxGeometry(5, 0.08, 0.18), new THREE.MeshBasicMaterial({ color: 0x9ff4ff, transparent: true, opacity: 0.72 }));
+      lamp.position.set(x, ARENA.wallHeight - 0.7, -ARENA.size / 2 + 0.55);
+      this.scene.add(lamp);
+    }
   }
 
   spawnCovers() {
@@ -723,9 +795,67 @@ class Game {
       wall.receiveShadow = true;
       this.scene.add(wall);
       wall.updateMatrixWorld();
+      const stripe = new THREE.Mesh(new THREE.BoxGeometry(w * 0.72, 0.08, Math.min(0.08, d * 0.35)), new THREE.MeshBasicMaterial({ color: i % 2 ? 0x0edcff : 0xffc44d, transparent: true, opacity: 0.88 }));
+      stripe.position.set(x, h + 0.055, z);
+      stripe.rotation.y = rot;
+      this.scene.add(stripe);
       const box = new THREE.Box3().setFromObject(wall);
       this.coverWalls.push({ mesh: wall, box });
     });
+  }
+
+  startWave() {
+    this.enemies = this.enemies.filter((enemy) => enemy.alive);
+    const total = Math.min(5 + this.wave, 8);
+    this.enemiesRemaining = total;
+    const types = [];
+    for (let i = 0; i < total; i += 1) {
+      if (this.wave % 3 === 0 && i === total - 1) types.push('boss');
+      else if (i % 3 === 1 || (this.wave > 2 && Math.random() < 0.22)) types.push('fast');
+      else types.push('normal');
+    }
+    types.forEach((type) => this.respawnEnemy(type));
+    if (this.started) this.showAnnouncement(`第 ${this.wave} 波`, '清理目标，保持移动');
+    this.updateGameHud();
+  }
+
+  onEnemyKilled(enemy) {
+    this.combo += 1;
+    this.comboTimer = 2.6;
+    const base = enemy.type === 'boss' ? 520 : enemy.type === 'fast' ? 170 : 110;
+    this.player.score += base + Math.min(this.combo, 10) * 15;
+    this.enemiesRemaining = Math.max(0, this.enemiesRemaining - 1);
+    this.updateGameHud();
+    if (this.enemiesRemaining === 0) {
+      this.player.score += 180 + this.wave * 40;
+      this.updateGameHud();
+      this.showAnnouncement('波次完成', `奖励 +${180 + this.wave * 40}`);
+      window.setTimeout(() => {
+        if (this.over) return;
+        this.wave += 1;
+        this.startWave();
+      }, 1700);
+    }
+  }
+
+  registerHit(amount, type) {
+    this.hud.hitMarker.classList.remove('active');
+    void this.hud.hitMarker.offsetWidth;
+    this.hud.hitMarker.classList.add('active');
+    this.hud.hitMarker.dataset.damage = type === 'boss' ? 'ARMOR' : `-${amount}`;
+  }
+
+  showAnnouncement(title, detail) {
+    this.hud.announcement.innerHTML = `<strong>${title}</strong><span>${detail}</span>`;
+    this.hud.announcement.classList.remove('active');
+    void this.hud.announcement.offsetWidth;
+    this.hud.announcement.classList.add('active');
+  }
+
+  updateGameHud() {
+    this.hud.wave.textContent = `WAVE ${this.wave}`;
+    this.hud.objective.textContent = this.enemiesRemaining > 0 ? `剩余目标 ${this.enemiesRemaining}` : '准备下一波';
+    this.hud.combo.textContent = this.combo > 1 ? `连击 x${this.combo}` : '';
   }
 
   randomFreePosition() {
@@ -793,6 +923,7 @@ class Game {
     });
     window.addEventListener('keydown', (e) => {
       this.player?.keys.add(e.code);
+      if (e.code === 'KeyP') this.togglePause();
       if (e.code === 'KeyR') {
         this.player.reload();
         this.audio.beep('reload');
@@ -800,9 +931,7 @@ class Game {
     });
     window.addEventListener('keyup', (e) => this.player?.keys.delete(e.code));
     this.renderer.domElement.addEventListener('click', () => {
-      this.audio.ensure();
-      this.renderer.domElement.requestPointerLock?.();
-      this.hud.start.hidden = true;
+      this.startGame();
     });
     document.addEventListener('pointerlockchange', () => {
       this.hud.lock.textContent = document.pointerLockElement ? '鼠标已锁定' : '点击画面锁定鼠标';
@@ -818,17 +947,22 @@ class Game {
       }
     });
     window.addEventListener('mouseup', () => { if (this.player) this.player.fireHeld = false; });
-    document.querySelector('#restartBtn').addEventListener('click', () => this.reset());
+    document.querySelector('#restartBtn').addEventListener('click', () => {
+      this.reset(false);
+      this.startGame();
+    });
     document.querySelector('#startBtn').addEventListener('click', () => {
-      this.audio.ensure();
-      this.renderer.domElement.requestPointerLock?.();
-      this.hud.start.hidden = true;
+      this.startGame();
     });
     this.hud.sound.addEventListener('click', (event) => {
       event.stopPropagation();
       this.audio.ensure();
       this.audio.setMuted(!this.audio.muted);
       this.updateSoundButton();
+    });
+    this.hud.pause.addEventListener('click', (event) => {
+      event.stopPropagation();
+      this.togglePause();
     });
     this.hud.quality.addEventListener('change', (event) => {
       this.quality = event.target.value;
@@ -843,6 +977,25 @@ class Game {
   updateSoundButton() {
     this.hud.sound.textContent = this.audio.muted ? '音效关' : '音效开';
     this.hud.sound.setAttribute('aria-pressed', `${!this.audio.muted}`);
+  }
+
+  startGame() {
+    if (this.over) return;
+    this.started = true;
+    this.hud.start.hidden = true;
+    this.audio.ensure();
+    this.renderer.domElement.requestPointerLock?.();
+    if (this.wave === 1 && this.enemiesRemaining > 0) this.showAnnouncement('第 1 波', '清理目标，保持移动');
+  }
+
+  togglePause() {
+    if (this.over) return;
+    this.paused = !this.paused;
+    this.player.fireHeld = false;
+    this.hud.pause.textContent = this.paused ? '继续' : '暂停';
+    this.hud.pause.setAttribute('aria-pressed', `${this.paused}`);
+    this.hud.lock.textContent = this.paused ? '已暂停' : (document.pointerLockElement ? '鼠标已锁定' : '点击画面锁定鼠标');
+    if (this.paused) document.exitPointerLock?.();
   }
 
   bindTouch() {
@@ -921,7 +1074,14 @@ class Game {
       this.fpsTimer = 0;
       this.hud.fps.textContent = `${Math.round(this.fpsAverage)} FPS`;
     }
-    if (!this.over) {
+    if (this.started && !this.over && !this.paused) {
+      if (this.comboTimer > 0) {
+        this.comboTimer -= dt;
+        if (this.comboTimer <= 0) {
+          this.combo = 0;
+          this.updateGameHud();
+        }
+      }
       this.player.update(dt, this);
       this.enemies.forEach((enemy) => enemy.update(dt, this));
       this.pickups.slice().forEach((pickup) => pickup.update(dt, this));
@@ -948,6 +1108,8 @@ document.querySelector('#app').innerHTML = `
     </div>
   </div>
   <div id="crosshair" aria-hidden="true"></div>
+  <div id="hitMarker" aria-hidden="true"></div>
+  <div id="announcement" aria-live="polite"></div>
   <div id="damageFlash"></div>
   <div id="lockState">点击画面锁定鼠标</div>
   <div id="systemPanel">
@@ -959,11 +1121,18 @@ document.querySelector('#app').innerHTML = `
     </select>
     <span id="fpsMeter">60 FPS</span>
     <button id="soundToggle" type="button" aria-pressed="true">音效开</button>
+    <button id="pauseToggle" type="button" aria-pressed="false">暂停</button>
+  </div>
+  <div id="missionPanel">
+    <strong id="waveText">WAVE 1</strong>
+    <span id="objectiveText">剩余目标 0</span>
+    <em id="comboText"></em>
   </div>
   <div id="startOverlay" class="overlay">
     <div class="modal">
-      <h1>仓库突击训练</h1>
-      <p>WASD 移动，鼠标瞄准，左键自动射击，R 换弹。移动端可用摇杆、射击按钮和辅助瞄准。</p>
+      <span class="modal-kicker">${GAME_COPY.title}</span>
+      <h1>${GAME_COPY.subtitle}</h1>
+      <p>进入波次挑战，清理红色突击兵、紫色高速兵和金色重装目标。WASD 移动，鼠标瞄准，左键射击，R 换弹，P 暂停。</p>
       <button id="startBtn" type="button">开始训练</button>
     </div>
   </div>

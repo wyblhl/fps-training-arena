@@ -1,7 +1,7 @@
 :root {
   font-family: Inter, "Segoe UI", system-ui, sans-serif;
   color: #edf3ff;
-  background: #07090d;
+  background: #05070b;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
@@ -62,10 +62,10 @@ button:active {
 .hud-panel {
   min-width: 186px;
   padding: 12px 14px;
-  border: 1px solid rgba(180, 211, 255, 0.24);
+  border: 1px solid rgba(14, 220, 255, 0.22);
   border-radius: 8px;
-  background: linear-gradient(180deg, rgba(16, 23, 33, 0.86), rgba(8, 12, 18, 0.72));
-  box-shadow: 0 16px 50px rgba(0, 0, 0, 0.3);
+  background: linear-gradient(180deg, rgba(9, 18, 27, 0.9), rgba(5, 8, 14, 0.72));
+  box-shadow: 0 16px 50px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.04);
   backdrop-filter: blur(8px);
 }
 
@@ -99,7 +99,7 @@ button:active {
 #healthBar {
   width: 100%;
   height: 100%;
-  background: linear-gradient(90deg, #e53343, #ff7d63);
+  background: linear-gradient(90deg, #ff315f, #ffb24a);
   transition: width 120ms ease;
 }
 
@@ -130,7 +130,7 @@ button:active {
   width: 2px;
   height: 28px;
   border-radius: 2px;
-  background: rgba(246, 252, 255, 0.88);
+  background: rgba(220, 252, 255, 0.9);
   transform: translate(-50%, -50%);
   box-shadow: 0 0 8px rgba(70, 180, 255, 0.45);
 }
@@ -138,6 +138,64 @@ button:active {
 #crosshair::after {
   width: 28px;
   height: 2px;
+}
+
+#hitMarker {
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  z-index: 4;
+  width: 46px;
+  height: 46px;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  opacity: 0;
+}
+
+#hitMarker::before,
+#hitMarker::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 18px;
+  height: 3px;
+  border-radius: 3px;
+  background: #ffd45f;
+  box-shadow: 0 0 14px rgba(255, 196, 77, 0.8);
+}
+
+#hitMarker::before {
+  transform: translate(-50%, -50%) rotate(45deg);
+}
+
+#hitMarker::after {
+  transform: translate(-50%, -50%) rotate(-45deg);
+}
+
+#hitMarker.active {
+  animation: hit-pop 220ms ease-out;
+}
+
+#hitMarker.active::after {
+  content: attr(data-damage);
+  width: auto;
+  height: auto;
+  top: -14px;
+  left: 50%;
+  padding: 0;
+  color: #ffe8a5;
+  background: transparent;
+  box-shadow: none;
+  font-size: 12px;
+  font-weight: 900;
+  transform: translateX(-50%);
+}
+
+@keyframes hit-pop {
+  0% { opacity: 0; transform: translate(-50%, -50%) scale(0.62); }
+  35% { opacity: 1; }
+  100% { opacity: 0; transform: translate(-50%, -50%) scale(1.28); }
 }
 
 #damageFlash {
@@ -172,6 +230,83 @@ button:active {
   pointer-events: none;
 }
 
+#missionPanel {
+  position: fixed;
+  left: 50%;
+  top: 18px;
+  z-index: 4;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 40px;
+  padding: 8px 13px;
+  border: 1px solid rgba(14, 220, 255, 0.2);
+  border-radius: 8px;
+  color: #dff8ff;
+  background: rgba(5, 8, 12, 0.58);
+  backdrop-filter: blur(8px);
+}
+
+#missionPanel strong {
+  color: #79f1ff;
+  font-size: 13px;
+  letter-spacing: 0.08em;
+}
+
+#missionPanel span {
+  font-size: 13px;
+  font-weight: 800;
+}
+
+#missionPanel em {
+  min-width: 60px;
+  color: #ffd45f;
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 900;
+  text-align: right;
+}
+
+#announcement {
+  position: fixed;
+  left: 50%;
+  top: 92px;
+  z-index: 5;
+  transform: translateX(-50%);
+  display: grid;
+  gap: 3px;
+  min-width: 220px;
+  padding: 11px 16px;
+  border: 1px solid rgba(255, 212, 95, 0.24);
+  border-radius: 8px;
+  color: #f8fbff;
+  background: linear-gradient(180deg, rgba(12, 18, 28, 0.82), rgba(5, 8, 12, 0.6));
+  text-align: center;
+  pointer-events: none;
+  opacity: 0;
+}
+
+#announcement strong {
+  color: #ffd45f;
+  font-size: 16px;
+}
+
+#announcement span {
+  color: #b8c8db;
+  font-size: 12px;
+}
+
+#announcement.active {
+  animation: announce 1.55s ease both;
+}
+
+@keyframes announce {
+  0% { opacity: 0; transform: translate(-50%, -10px); }
+  15%, 76% { opacity: 1; transform: translate(-50%, 0); }
+  100% { opacity: 0; transform: translate(-50%, -8px); }
+}
+
 #systemPanel {
   position: fixed;
   right: 18px;
@@ -189,7 +324,8 @@ button:active {
 }
 
 #qualitySelect,
-#soundToggle {
+#soundToggle,
+#pauseToggle {
   min-height: 28px;
   border: 1px solid rgba(180, 211, 255, 0.22);
   border-radius: 6px;
@@ -204,6 +340,13 @@ button:active {
   min-width: 58px;
   color: #071016;
   background: #f7c94b;
+  box-shadow: none;
+}
+
+#pauseToggle {
+  min-width: 48px;
+  color: #edf3ff;
+  background: rgba(14, 220, 255, 0.18);
   box-shadow: none;
 }
 
@@ -227,12 +370,21 @@ button:active {
 .modal {
   width: min(430px, 92vw);
   padding: 28px;
-  border: 1px solid rgba(187, 216, 255, 0.25);
+  border: 1px solid rgba(14, 220, 255, 0.24);
   border-radius: 8px;
-  background: rgba(9, 14, 22, 0.88);
+  background: linear-gradient(180deg, rgba(8, 15, 24, 0.92), rgba(5, 8, 14, 0.88));
   box-shadow: 0 24px 80px rgba(0, 0, 0, 0.48);
   text-align: center;
   backdrop-filter: blur(10px);
+}
+
+.modal-kicker {
+  display: block;
+  margin-bottom: 8px;
+  color: #79f1ff;
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0.18em;
 }
 
 .modal h1,
@@ -329,5 +481,21 @@ button:active {
 
   #fpsMeter {
     display: none;
+  }
+
+  #missionPanel {
+    top: 92px;
+    gap: 8px;
+    min-height: 34px;
+    padding: 7px 10px;
+  }
+
+  #missionPanel em {
+    display: none;
+  }
+
+  #announcement {
+    top: 134px;
+    min-width: 190px;
   }
 }
