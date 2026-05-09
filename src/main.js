@@ -57,33 +57,49 @@ class AudioManager {
   constructor() {
     this.ctx = null;
     this.hum = null;
+    this.master = null;
+    this.muted = localStorage.getItem('fps-muted') === 'true';
   }
 
   ensure() {
     if (this.ctx) return;
     this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+    this.master = this.ctx.createGain();
+    this.master.gain.value = this.muted ? 0 : 0.42;
+    this.master.connect(this.ctx.destination);
     const osc = this.ctx.createOscillator();
+    const filter = this.ctx.createBiquadFilter();
     const gain = this.ctx.createGain();
-    osc.type = 'sawtooth';
-    osc.frequency.value = 48;
-    gain.gain.value = 0.018;
-    osc.connect(gain).connect(this.ctx.destination);
+    osc.type = 'sine';
+    osc.frequency.value = 46;
+    filter.type = 'lowpass';
+    filter.frequency.value = 82;
+    gain.gain.value = 0.004;
+    osc.connect(filter).connect(gain).connect(this.master);
     osc.start();
     this.hum = { osc, gain };
   }
 
+  setMuted(value) {
+    this.muted = value;
+    localStorage.setItem('fps-muted', `${value}`);
+    if (!this.ctx || !this.master) return;
+    this.master.gain.setTargetAtTime(value ? 0 : 0.42, this.ctx.currentTime, 0.04);
+  }
+
   beep(type) {
+    if (this.muted) return;
     this.ensure();
     const now = this.ctx.currentTime;
     const osc = this.ctx.createOscillator();
     const gain = this.ctx.createGain();
     const filter = this.ctx.createBiquadFilter();
     const presets = {
-      shoot: ['square', 105, 0.055, 0.16, 900],
-      reload: ['triangle', 240, 0.18, 0.1, 600],
-      hit: ['sawtooth', 90, 0.11, 0.13, 500],
-      pickup: ['sine', 620, 0.16, 0.12, 1600],
-      hurt: ['triangle', 72, 0.2, 0.18, 420],
+      shoot: ['triangle', 118, 0.045, 0.052, 680],
+      reload: ['sine', 220, 0.16, 0.035, 520],
+      hit: ['triangle', 126, 0.08, 0.045, 620],
+      pickup: ['sine', 620, 0.14, 0.048, 1500],
+      hurt: ['sine', 82, 0.16, 0.055, 360],
     };
     const [wave, freq, dur, volume, cutoff] = presets[type] || presets.pickup;
     osc.type = wave;
@@ -91,9 +107,10 @@ class AudioManager {
     osc.frequency.exponentialRampToValueAtTime(Math.max(40, freq * 0.45), now + dur);
     filter.type = 'lowpass';
     filter.frequency.value = cutoff;
-    gain.gain.setValueAtTime(volume, now);
+    gain.gain.setValueAtTime(0.001, now);
+    gain.gain.exponentialRampToValueAtTime(volume, now + 0.008);
     gain.gain.exponentialRampToValueAtTime(0.001, now + dur);
-    osc.connect(filter).connect(gain).connect(this.ctx.destination);
+    osc.connect(filter).connect(gain).connect(this.master);
     osc.start(now);
     osc.stop(now + dur + 0.02);
   }
@@ -577,6 +594,7 @@ class Game {
       lock: document.querySelector('#lockState'),
       quality: document.querySelector('#qualitySelect'),
       fps: document.querySelector('#fpsMeter'),
+      sound: document.querySelector('#soundToggle'),
     };
     this.touch = {
       move: new THREE.Vector2(),
@@ -593,6 +611,7 @@ class Game {
     this.over = false;
     this.initRenderer();
     this.bindEvents();
+    this.updateSoundButton();
     this.reset();
     this.animate();
   }
@@ -805,6 +824,12 @@ class Game {
       this.renderer.domElement.requestPointerLock?.();
       this.hud.start.hidden = true;
     });
+    this.hud.sound.addEventListener('click', (event) => {
+      event.stopPropagation();
+      this.audio.ensure();
+      this.audio.setMuted(!this.audio.muted);
+      this.updateSoundButton();
+    });
     this.hud.quality.addEventListener('change', (event) => {
       this.quality = event.target.value;
       this.applyQuality(true);
@@ -813,6 +838,11 @@ class Game {
       if (document.hidden && this.player) this.player.fireHeld = false;
     });
     this.bindTouch();
+  }
+
+  updateSoundButton() {
+    this.hud.sound.textContent = this.audio.muted ? '音效关' : '音效开';
+    this.hud.sound.setAttribute('aria-pressed', `${!this.audio.muted}`);
   }
 
   bindTouch() {
@@ -928,6 +958,7 @@ document.querySelector('#app').innerHTML = `
       <option value="high">高画质</option>
     </select>
     <span id="fpsMeter">60 FPS</span>
+    <button id="soundToggle" type="button" aria-pressed="true">音效开</button>
   </div>
   <div id="startOverlay" class="overlay">
     <div class="modal">

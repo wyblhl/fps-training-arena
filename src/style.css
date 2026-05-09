@@ -188,7 +188,8 @@ button:active {
   font-size: 12px;
 }
 
-#qualitySelect {
+#qualitySelect,
+#soundToggle {
   min-height: 28px;
   border: 1px solid rgba(180, 211, 255, 0.22);
   border-radius: 6px;
@@ -197,6 +198,13 @@ button:active {
   font: 700 12px/1 "Segoe UI", system-ui, sans-serif;
   letter-spacing: 0;
   padding: 0 6px;
+}
+
+#soundToggle {
+  min-width: 58px;
+  color: #071016;
+  background: #f7c94b;
+  box-shadow: none;
 }
 
 #fpsMeter {
