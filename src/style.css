@@ -1,0 +1,325 @@
+:root {
+  font-family: Inter, "Segoe UI", system-ui, sans-serif;
+  color: #edf3ff;
+  background: #07090d;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+html,
+body,
+#app {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+  touch-action: none;
+}
+
+canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  cursor: crosshair;
+}
+
+button {
+  border: 0;
+  border-radius: 8px;
+  color: #071016;
+  background: #f7c94b;
+  font: 800 15px/1 "Segoe UI", system-ui, sans-serif;
+  letter-spacing: 0;
+  min-height: 42px;
+  padding: 0 20px;
+  box-shadow: 0 10px 28px rgba(247, 201, 75, 0.28);
+}
+
+button:active {
+  transform: translateY(1px);
+}
+
+#hud {
+  position: fixed;
+  inset: 18px 18px auto;
+  z-index: 4;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  pointer-events: none;
+}
+
+.hud-panel {
+  min-width: 186px;
+  padding: 12px 14px;
+  border: 1px solid rgba(180, 211, 255, 0.24);
+  border-radius: 8px;
+  background: linear-gradient(180deg, rgba(16, 23, 33, 0.86), rgba(8, 12, 18, 0.72));
+  box-shadow: 0 16px 50px rgba(0, 0, 0, 0.3);
+  backdrop-filter: blur(8px);
+}
+
+.hud-label,
+.ammo-panel {
+  font-size: 13px;
+  font-weight: 750;
+  line-height: 1.55;
+  color: #dce9ff;
+}
+
+.ammo-panel {
+  text-align: right;
+}
+
+.ammo-panel strong {
+  font-size: 22px;
+  color: #fff4bc;
+}
+
+.health-track {
+  width: 160px;
+  height: 14px;
+  margin-top: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 4px;
+  overflow: hidden;
+  background: #231316;
+}
+
+#healthBar {
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, #e53343, #ff7d63);
+  transition: width 120ms ease;
+}
+
+#shieldState {
+  margin-top: 8px;
+  font-size: 12px;
+  font-weight: 800;
+  color: #6cc8ff;
+}
+
+#crosshair {
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  z-index: 3;
+  width: 28px;
+  height: 28px;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+#crosshair::before,
+#crosshair::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 2px;
+  height: 28px;
+  border-radius: 2px;
+  background: rgba(246, 252, 255, 0.88);
+  transform: translate(-50%, -50%);
+  box-shadow: 0 0 8px rgba(70, 180, 255, 0.45);
+}
+
+#crosshair::after {
+  width: 28px;
+  height: 2px;
+}
+
+#damageFlash {
+  position: fixed;
+  inset: 0;
+  z-index: 5;
+  pointer-events: none;
+  opacity: 0;
+  background: radial-gradient(circle, rgba(255, 0, 0, 0.05), rgba(255, 0, 0, 0.38));
+}
+
+#damageFlash.active {
+  animation: damage-pulse 260ms ease-out;
+}
+
+@keyframes damage-pulse {
+  0% { opacity: 0.9; }
+  100% { opacity: 0; }
+}
+
+#lockState {
+  position: fixed;
+  left: 50%;
+  bottom: 20px;
+  z-index: 4;
+  transform: translateX(-50%);
+  padding: 8px 12px;
+  border-radius: 6px;
+  color: rgba(236, 245, 255, 0.72);
+  background: rgba(5, 8, 12, 0.58);
+  font-size: 12px;
+  pointer-events: none;
+}
+
+#systemPanel {
+  position: fixed;
+  right: 18px;
+  bottom: 18px;
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid rgba(180, 211, 255, 0.18);
+  border-radius: 8px;
+  color: rgba(236, 245, 255, 0.76);
+  background: rgba(5, 8, 12, 0.58);
+  font-size: 12px;
+}
+
+#qualitySelect {
+  min-height: 28px;
+  border: 1px solid rgba(180, 211, 255, 0.22);
+  border-radius: 6px;
+  color: #edf3ff;
+  background: rgba(13, 19, 28, 0.9);
+  font: 700 12px/1 "Segoe UI", system-ui, sans-serif;
+  letter-spacing: 0;
+  padding: 0 6px;
+}
+
+#fpsMeter {
+  min-width: 46px;
+  text-align: right;
+  color: #fff4bc;
+  font-weight: 800;
+}
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 8;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: radial-gradient(circle at center, rgba(28, 45, 64, 0.46), rgba(2, 4, 7, 0.82));
+}
+
+.modal {
+  width: min(430px, 92vw);
+  padding: 28px;
+  border: 1px solid rgba(187, 216, 255, 0.25);
+  border-radius: 8px;
+  background: rgba(9, 14, 22, 0.88);
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.48);
+  text-align: center;
+  backdrop-filter: blur(10px);
+}
+
+.modal h1,
+.modal h2 {
+  margin: 0 0 12px;
+  font-size: 28px;
+  line-height: 1.12;
+  letter-spacing: 0;
+}
+
+.modal p {
+  margin: 0 0 20px;
+  color: #b8c8db;
+  font-size: 14px;
+  line-height: 1.7;
+}
+
+#mobileControls {
+  position: fixed;
+  inset: auto 0 0;
+  z-index: 6;
+  display: none;
+  pointer-events: none;
+}
+
+#joystick {
+  position: fixed;
+  left: 24px;
+  bottom: 26px;
+  width: 116px;
+  height: 116px;
+  border: 1px solid rgba(221, 237, 255, 0.34);
+  border-radius: 50%;
+  background: rgba(10, 18, 28, 0.5);
+  pointer-events: auto;
+}
+
+#joystickKnob {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 48px;
+  height: 48px;
+  margin: -24px 0 0 -24px;
+  border-radius: 50%;
+  background: rgba(231, 244, 255, 0.78);
+  box-shadow: 0 0 20px rgba(93, 183, 255, 0.35);
+}
+
+#fireButton {
+  position: fixed;
+  right: 26px;
+  bottom: 34px;
+  width: 98px;
+  height: 98px;
+  border-radius: 50%;
+  pointer-events: auto;
+  color: white;
+  background: radial-gradient(circle, #ff734f, #bf2231);
+  box-shadow: 0 12px 36px rgba(214, 30, 44, 0.42);
+}
+
+@media (pointer: coarse), (max-width: 820px) {
+  #mobileControls {
+    display: block;
+  }
+
+  #hud {
+    inset: 12px 12px auto;
+  }
+
+  .hud-panel {
+    min-width: 142px;
+    padding: 10px 11px;
+  }
+
+  .health-track {
+    width: 120px;
+  }
+
+  .ammo-panel strong {
+    font-size: 18px;
+  }
+
+  #lockState {
+    display: none;
+  }
+
+  #systemPanel {
+    right: 12px;
+    bottom: 146px;
+    padding: 7px 8px;
+  }
+
+  #fpsMeter {
+    display: none;
+  }
+}

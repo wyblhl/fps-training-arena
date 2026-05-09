@@ -1,0 +1,18 @@
+{
+  "name": "fps-training-arena",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview --host 127.0.0.1",
+    "serve": "vite --host 127.0.0.1 --port 5174"
+  },
+  "devDependencies": {
+    "vite": "^8.0.10"
+  },
+  "dependencies": {
+    "three": "^0.184.0"
+  }
+}
